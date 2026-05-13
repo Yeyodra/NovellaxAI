@@ -1,9 +1,9 @@
 {
-  "name": "9router",
+  "name": "novellaxai",
   "version": "0.4.37",
-  "description": "9Router CLI - Start and manage 9Router server",
+  "description": "NovellaxAI CLI - Start and manage NovellaxAI server",
   "bin": {
-    "9router": "./cli.js"
+    "novellaxai": "./cli.js"
   },
   "files": [
     "cli.js",

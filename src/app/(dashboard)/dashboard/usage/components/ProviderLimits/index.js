@@ -8,6 +8,8 @@ import { parseQuotaData, calculatePercentage } from "./utils";
 import Card from "@/shared/components/Card";
 import { EditConnectionModal } from "@/shared/components";
 import { USAGE_SUPPORTED_PROVIDERS, USAGE_APIKEY_PROVIDERS } from "@/shared/constants/providers";
+import { groupConnectionsByProvider, aggregateQuotasForProvider } from "./aggregateUtils";
+import ProviderSummaryCard from "./ProviderSummaryCard";
 
 // Connection is eligible for the quota page when it uses OAuth or is an apikey provider whitelisted for quota
 const isUsageEligible = (conn) =>
@@ -615,6 +617,51 @@ export default function ProviderLimits() {
       </div>
 
       {/* Provider cards: 2 columns, compact */}
+      {providerFilter === "all" ? (
+        /* Aggregated summary view: 1 card per provider */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {(() => {
+            const grouped = groupConnectionsByProvider(filteredConnections);
+            // Build provider data with quota counts for sorting
+            const providerData = Object.keys(grouped).map((provider) => {
+              const conns = grouped[provider];
+              const { quotas, accountStats, plan } = aggregateQuotasForProvider(conns, quotaData, errors);
+              return { provider, conns, quotas, accountStats, plan };
+            });
+
+            // Sort: multi-model cards together, single-quota cards together
+            // This ensures symmetric heights in the 2-col grid
+            providerData.sort((a, b) => {
+              const aMulti = a.quotas.length > 2 ? 1 : 0;
+              const bMulti = b.quotas.length > 2 ? 1 : 0;
+              if (aMulti !== bMulti) return bMulti - aMulti; // multi-model first
+              // Within same group, sort by USAGE_SUPPORTED_PROVIDERS order
+              const orderA = USAGE_SUPPORTED_PROVIDERS.indexOf(a.provider);
+              const orderB = USAGE_SUPPORTED_PROVIDERS.indexOf(b.provider);
+              return (orderA === -1 ? 999 : orderA) - (orderB === -1 ? 999 : orderB);
+            });
+
+            return providerData.map(({ provider, conns, quotas, accountStats, plan }) => {
+              const isLoading = conns.some((c) => loading[c.id]);
+
+              return (
+                <ProviderSummaryCard
+                  key={provider}
+                  provider={provider}
+                  quotas={quotas}
+                  accountStats={accountStats}
+                  plan={plan}
+                  loading={isLoading}
+                  onRefresh={() => {
+                    conns.forEach((c) => fetchQuota(c.id, c.provider));
+                  }}
+                  onSelect={() => setProviderFilter(provider)}
+                />
+              );
+            });
+          })()}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {sortedConnections.map((conn) => {
           const quota = quotaData[conn.id];
@@ -747,6 +794,7 @@ export default function ProviderLimits() {
           );
         })}
       </div>
+      )}
 
       <EditConnectionModal
         isOpen={showEditModal}
